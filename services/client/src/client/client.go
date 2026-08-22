@@ -3,6 +3,8 @@ package client
 import (
 	"net"
 	"time"
+	"os"
+	"bufio"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
@@ -19,6 +21,8 @@ type ClientConfig struct {
 	ServerHost string
 	ServerPort string
 	AgencyId   string
+	InputFile  string
+	OutputFile string
 }
 
 type Client struct {
@@ -59,10 +63,54 @@ func connectToServer(host, port string) (net.Conn, error) {
 }
 
 func (client *Client) Run() error {
-	const mainAction = "test-echo-server"
+	//const mainAction = "test-echo-server"
 	defer client.conn.Close()
 
-	for messageId := range ECHO_CLIENT_MESSAGE_AMOUNT {
+	inputFile, err := os.Open(client.config.InputFile)
+	if err != nil {
+		logger.Error("open-input-file", logger.Fail, "input-file", client.config.InputFile)
+		return err
+	}
+	defer inputFile.Close()
+
+	outputFile, err := os.Create(client.config.OutputFile)
+	if err != nil {
+		logger.Error("crate-output-file", logger.Fail, "output-file", client.config.OutputFile)
+		return err
+	}
+	defer outputFile.Close()
+
+	scanner := bufio.NewScanner(inputFile)
+
+	writer := bufio.NewWriter(outputFile)
+	defer writer.Flush()
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		
+		if err := safe_socket.SendAll(client.conn, []byte(line)); err != nil{
+			logger.Error("send-message", logger.Fail)
+			return err
+		}
+
+		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
+		if err != nil {
+			logger.Error("recv-response", logger.Fail)
+			return err
+		}
+
+		if _, err := writer.WriteString(string(responseBuffer) + "\n"); err != nil {
+			logger.Error("write-response", logger.Fail)
+			return err
+		}
+
+		if err:= scanner.Err(); err != nil {
+			return err
+		}
+
+	}
+
+	/*for messageId := range ECHO_CLIENT_MESSAGE_AMOUNT {
 		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
 		logger.Info(mainAction, logger.InProgress, messageArgs...)
 
@@ -86,7 +134,7 @@ func (client *Client) Run() error {
 
 		time.Sleep(ECHO_CLIENT_MESSAGE_DELAY_MS * time.Millisecond)
 	}
-	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
+	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId) */
 
 	return nil
 }
