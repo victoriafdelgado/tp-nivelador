@@ -1,0 +1,50 @@
+package protocol
+
+import (
+	"encoding/binary"
+	"fmt"
+	"io"
+
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/domain"
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
+)
+
+type MessageType int
+
+const (
+	SendMessage = iota
+	ReceiveMessage
+)
+
+func serializeBet(bet domain.Bet) []byte {
+	payload := fmt.Sprintf("%s,%s,%d,%s,%d", bet.Name, bet.Surname, bet.Id, bet.DateOfBirth, bet.Number)
+	return []byte(payload)
+
+}
+
+func SendBetMessage(bet domain.Bet, socket io.Writer) error {
+	payload := serializeBet(bet)
+	header := make([]byte, 5)
+	header[0] = SendMessage
+	binary.BigEndian.PutUint32(header[1:], uint32(len(payload)))
+
+	message := append(header, payload...)
+	return safe_socket.SendAll(socket, message)
+}
+
+func ReceiveResultMessage(socket io.Reader) (string, error) {
+	header, err := safe_socket.RecvAll(socket, 5)
+	if err != nil {
+		return "", err
+	}
+	if header[0] != ReceiveMessage {
+		return "", fmt.Errorf("Codigo invalido")
+	}
+
+	length := binary.BigEndian.Uint32(header[1:])
+	payload, err := safe_socket.RecvAll(socket, int(length))
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
+}

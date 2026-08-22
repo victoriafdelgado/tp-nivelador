@@ -1,1 +1,6 @@
-Redactar un breve informe en donde se detallen los aspectos más importantes de la solución provista, como ser el protocolo de comunicación implementado y los mecanismos para sincronizar la ejecución concurrente.
+# Protocolo de Comunicacion
+
+Se utiliza un protocolo simple de header y payload
+- Codigo de tipo mensaje (1 byte)
+- Largo del mensaje (4 bytes)
+- Payload (largo variable)

@@ -1,21 +1,18 @@
 package client
 
 import (
-	"net"
-	"time"
-	"os"
 	"bufio"
+	"net"
+	"os"
+	"time"
 
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/domain"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
-	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/protocol"
 )
 
 const CONNECTION_ATTEMPTS_MAX = 3
 const CONNECTION_ATTEMPS_DELAY_MS = 200
-
-const ECHO_CLIENT_BUFFER_SIZE = 1024
-const ECHO_CLIENT_MESSAGE_AMOUNT = 3
-const ECHO_CLIENT_MESSAGE_DELAY_MS = 1000
 
 type ClientConfig struct {
 	ServerHost string
@@ -87,21 +84,25 @@ func (client *Client) Run() error {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		
-		message := make([]byte, 1024)
-		copy(message, []byte(line))
 
-		if err := safe_socket.SendAll(client.conn, message); err != nil {
+		bet, err := domain.ParseBetFromString(line)
+		if err != nil {
+			logger.Error("parser-error", logger.Fail)
 			return err
 		}
 
-		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
+		if err := protocol.SendBetMessage(bet, client.conn); err != nil {
+			logger.Error("send-error", logger.Fail)
+			return err
+		}
+
+		response, err := protocol.ReceiveResultMessage(client.conn)
 		if err != nil {
 			logger.Error("recv-response", logger.Fail)
 			return err
 		}
 
-		if _, err := writer.WriteString(string(responseBuffer) + "\n"); err != nil {
+		if _, err := writer.WriteString(string(response) + "\n"); err != nil {
 			logger.Error("write-response", logger.Fail)
 			return err
 		}
@@ -110,6 +111,6 @@ func (client *Client) Run() error {
 	if err := scanner.Err(); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
