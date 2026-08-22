@@ -2,10 +2,30 @@ import socket
 
 # TODO: Complete with a short-read/short-write tolerant implementation
 
-
 def recv_all(socket: socket.socket, size):
-    return socket.recv(size)
+    buffer = []
+    bytesRecieved = 0
 
+    while  bytesRecieved < size:
+        buff = socket.recv(size - len(buffer))
+        if len(buff) == 0:
+            if bytesRecieved == 0:
+                return b""
+            raise ConnectionError("socket connection failed")
+        buffer.append(buff)
+        bytesRecieved += len(buff)
+    return b''.join(buffer)
 
 def send_all(socket: socket.socket, bytes):
-    return socket.send(bytes)
+    bytesSent = 0
+
+    while bytesSent < len(bytes):
+        n = socket.send(bytes[bytesSent:])
+
+        if n == 0:
+            raise ConnectionError("socket connection failed")
+
+        bytesSent += n
+
+    return bytesSent
+

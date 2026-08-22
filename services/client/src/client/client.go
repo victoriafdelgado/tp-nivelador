@@ -13,7 +13,7 @@ import (
 const CONNECTION_ATTEMPTS_MAX = 3
 const CONNECTION_ATTEMPS_DELAY_MS = 200
 
-const ECHO_CLIENT_BUFFER_SIZE = 512
+const ECHO_CLIENT_BUFFER_SIZE = 1024
 const ECHO_CLIENT_MESSAGE_AMOUNT = 3
 const ECHO_CLIENT_MESSAGE_DELAY_MS = 1000
 
@@ -88,8 +88,10 @@ func (client *Client) Run() error {
 	for scanner.Scan() {
 		line := scanner.Text()
 		
-		if err := safe_socket.SendAll(client.conn, []byte(line)); err != nil{
-			logger.Error("send-message", logger.Fail)
+		message := make([]byte, 1024)
+		copy(message, []byte(line))
+
+		if err := safe_socket.SendAll(client.conn, message); err != nil {
 			return err
 		}
 
@@ -103,38 +105,11 @@ func (client *Client) Run() error {
 			logger.Error("write-response", logger.Fail)
 			return err
 		}
-
-		if err:= scanner.Err(); err != nil {
-			return err
-		}
-
 	}
 
-	/*for messageId := range ECHO_CLIENT_MESSAGE_AMOUNT {
-		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
-		logger.Info(mainAction, logger.InProgress, messageArgs...)
-
-		clientMessage := client.config.AgencyId
-
-		if err := safe_socket.SendAll(client.conn, []byte(clientMessage)); err != nil {
-			logger.Error("send-message", logger.Fail, messageArgs...)
-			return err
-		}
-
-		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
-		if err != nil {
-			logger.Error("recv-response", logger.Fail, messageArgs...)
-			return err
-		}
-
-		if string(responseBuffer) == clientMessage {
-			logger.Error("check-response", logger.Fail, messageArgs...)
-			return err
-		}
-
-		time.Sleep(ECHO_CLIENT_MESSAGE_DELAY_MS * time.Millisecond)
+	if err := scanner.Err(); err != nil {
+		return err
 	}
-	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId) */
-
+	
 	return nil
 }
