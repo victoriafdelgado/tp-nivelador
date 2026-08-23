@@ -14,10 +14,11 @@ type MessageType int
 const (
 	SendMessage = iota
 	ReceiveMessage
+	DoneSendingBets
 )
 
 func serializeBet(bet domain.Bet) []byte {
-	payload := fmt.Sprintf("%s,%s,%d,%s,%d", bet.Name, bet.Surname, bet.Id, bet.DateOfBirth, bet.Number)
+	payload := fmt.Sprintf("%d,%s,%s,%d,%s,%d", bet.AgencyId, bet.Name, bet.Surname, bet.Id, bet.DateOfBirth, bet.Number)
 	return []byte(payload)
 
 }
@@ -30,6 +31,13 @@ func SendBetMessage(bet domain.Bet, socket io.Writer) error {
 
 	message := append(header, payload...)
 	return safe_socket.SendAll(socket, message)
+}
+
+func SendDoneMessage(socket io.Writer) error {
+	header := make([]byte, 5)
+	header[0] = byte(DoneSendingBets)
+	binary.BigEndian.PutUint32(header[1:], 0)
+	return safe_socket.SendAll(socket, header)
 }
 
 func ReceiveResultMessage(socket io.Reader) (string, error) {

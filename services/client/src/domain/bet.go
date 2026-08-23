@@ -7,6 +7,7 @@ import (
 )
 
 type Bet struct {
+	AgencyId    int
 	Name        string
 	Surname     string
 	Id          int
@@ -18,19 +19,24 @@ func ParseBetFromString(betString string) (Bet, error) {
 
 	fields := strings.Split(betString, ",")
 
-	Name := fields[0]
-	Surname := fields[1]
-	Id, err := strconv.Atoi(fields[2])
+	AgencyId, err := strconv.Atoi(fields[0])
 	if err != nil {
 		return Bet{}, fmt.Errorf("dni inválido: %w", err)
 	}
-	DateOfBirth := fields[3]
-	Number, err := strconv.Atoi(fields[4])
+	Name := fields[1]
+	Surname := fields[2]
+	Id, err := strconv.Atoi(fields[3])
+	if err != nil {
+		return Bet{}, fmt.Errorf("dni inválido: %w", err)
+	}
+	DateOfBirth := fields[4]
+	Number, err := strconv.Atoi(fields[5])
 	if err != nil {
 		return Bet{}, fmt.Errorf("numero inválido: %w", err)
 	}
 
 	bet := Bet{
+		AgencyId:    AgencyId,
 		Name:        Name,
 		Surname:     Surname,
 		Id:          Id,

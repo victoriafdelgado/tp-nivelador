@@ -5,9 +5,8 @@ import socket
 def recv_all(socket: socket.socket, size):
     buffer = []
     bytesRecieved = 0
-
-    while  bytesRecieved < size:
-        buff = socket.recv(size - len(buffer))
+    while bytesRecieved < size:
+        buff = socket.recv(size - bytesRecieved)   
         if len(buff) == 0:
             if bytesRecieved == 0:
                 return b""

@@ -60,7 +60,6 @@ func connectToServer(host, port string) (net.Conn, error) {
 }
 
 func (client *Client) Run() error {
-	//const mainAction = "test-echo-server"
 	defer client.conn.Close()
 
 	inputFile, err := os.Open(client.config.InputFile)
@@ -84,8 +83,9 @@ func (client *Client) Run() error {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		lineWithAgency := client.config.AgencyId + "," + line
 
-		bet, err := domain.ParseBetFromString(line)
+		bet, err := domain.ParseBetFromString(lineWithAgency)
 		if err != nil {
 			logger.Error("parser-error", logger.Fail)
 			return err
@@ -96,19 +96,24 @@ func (client *Client) Run() error {
 			return err
 		}
 
-		response, err := protocol.ReceiveResultMessage(client.conn)
-		if err != nil {
-			logger.Error("recv-response", logger.Fail)
-			return err
-		}
-
-		if _, err := writer.WriteString(string(response) + "\n"); err != nil {
-			logger.Error("write-response", logger.Fail)
-			return err
-		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
 	}
 
-	if err := scanner.Err(); err != nil {
+	if err := protocol.SendDoneMessage(client.conn); err != nil {
+		logger.Error("send-error", logger.Fail)
+		return err
+	}
+
+	response, err := protocol.ReceiveResultMessage(client.conn)
+	if err != nil {
+		logger.Error("recv-response", logger.Fail)
+		return err
+	}
+
+	if _, err := writer.WriteString(string(response) + "\n"); err != nil {
+		logger.Error("write-response", logger.Fail)
 		return err
 	}
 
