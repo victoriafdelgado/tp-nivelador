@@ -2,17 +2,19 @@ import socket
 import logger
 import protocol
 import domain
-from lottery.lottery import Lottery
+import threading
+from lottery import Lottery
 
 class Server:
-    def __init__(self, server_host: str, server_port: int) -> None:
+    def __init__(self, server_host: str, server_port: int, lottery: Lottery) -> None:
         self.server_host = server_host
         self.server_port = server_port
-        self.lottery = Lottery("/tmp/bets.csv")
+        self.lottery = lottery
 
     def _handle_client(self, client_socket):
         action = "handle-client"
         message_amount = 0
+
         try:
             logger.info(action, logger.LogResult.in_progress)
             while True:
