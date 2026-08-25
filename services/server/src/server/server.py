@@ -16,15 +16,20 @@ class Server:
         try:
             logger.info(action, logger.LogResult.in_progress)
             while True:
-                msg_type, payload = protocol.recieve_bet_message(client_socket)
+                msg_type, payload = protocol.recieve_bet_chunk(client_socket)
                 if msg_type == 0:
                     bet = domain.string_to_bet(payload)
                     self.lottery.store_bets([bet])
                     message_amount += 1
-                    
+                if msg_type == 3:
+                    bets = domain.strings_to_bets(payload)
+                    self.lottery.store_bets(bets)
+                    message_amount +=1
                 if msg_type == 2:
                     bets = self.lottery.load_bets()
-                    
+                    if not bets:
+                        protocol.send_ack(client_socket, "Error")
+                    protocol.send_ack(client_socket, "OK")
                     winner_strings = []
                     for b in bets:
                         if self.lottery.has_won(b):
@@ -32,6 +37,7 @@ class Server:
                     
                     payload = "\n".join(winner_strings) 
                     protocol.send_result_message(client_socket, payload)
+                    return
 
                 if msg_type is None:
                     logger.info(action, logger.LogResult.success, "messages-amount", message_amount)

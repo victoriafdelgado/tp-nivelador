@@ -1,1 +1,1 @@
-from .domain import string_to_bet , bet_to_string
+from .domain import string_to_bet , bet_to_string, strings_to_bets

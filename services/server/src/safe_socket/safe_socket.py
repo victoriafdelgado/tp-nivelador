@@ -7,10 +7,10 @@ def recv_all(socket: socket.socket, size):
     bytesRecieved = 0
     while bytesRecieved < size:
         buff = socket.recv(size - bytesRecieved)   
-        if len(buff) == 0:
+        if not buff:
             if bytesRecieved == 0:
                 return b""
-            raise ConnectionError("socket connection failed")
+            raise ConnectionError("Socket connection failed")
         buffer.append(buff)
         bytesRecieved += len(buff)
     return b''.join(buffer)
@@ -21,8 +21,8 @@ def send_all(socket: socket.socket, bytes):
     while bytesSent < len(bytes):
         n = socket.send(bytes[bytesSent:])
 
-        if n == 0:
-            raise ConnectionError("socket connection failed")
+        if n is None:
+            raise ConnectionError("Socket connection failed")
 
         bytesSent += n
 

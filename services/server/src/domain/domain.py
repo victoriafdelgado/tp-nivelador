@@ -8,4 +8,5 @@ def string_to_bet(bet_string):
 def bet_to_string(bet):
     return f"{bet.first_name},{bet.last_name},{bet.document},{bet.birthdate},{bet.number}"
 
-
+def strings_to_bets(payload):
+    return [string_to_bet(line) for line in payload]

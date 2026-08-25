@@ -6,13 +6,12 @@ func SendAll(socket io.Writer, bytes []byte) error {
 	bytesSent := 0
 	for bytesSent < len(bytes) {
 		n, err := socket.Write(bytes[bytesSent:])
+		if n > 0 {
+			bytesSent += n
+		}
 		if err != nil {
 			return err
 		}
-		if n == 0 {
-			return io.ErrUnexpectedEOF
-		}
-		bytesSent += n
 	}
 	return nil
 }
@@ -26,11 +25,14 @@ func RecvAll(socket io.Reader, size int) ([]byte, error) {
 		if n > 0 {
 			bytesReceived += n
 		}
-		if err != nil {
-			return nil, err
+		if bytesReceived == size {
+			return buff, nil
 		}
-		if n == 0 {
-			return nil, io.ErrUnexpectedEOF
+		if err != nil {
+			if err == io.EOF {
+				return nil, io.ErrUnexpectedEOF
+			}
+			return nil, err
 		}
 	}
 	return buff, nil
