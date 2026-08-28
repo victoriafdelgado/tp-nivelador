@@ -8,12 +8,13 @@ from lottery import Lottery
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 STORAGE_FILEPATH = os.environ.get("STORAGE_FILEPATH", "bets.csv")
-
+AGENCY_QUORUM_MIN = os.environ.get("AGENCY_QUORUM_MIN")
 
 def main():
     logger.init()
     lottery = Lottery(STORAGE_FILEPATH)
-    s = server.Server(SERVER_HOST, SERVER_PORT, lottery)
+    agency_quorum_min = int(AGENCY_QUORUM_MIN)
+    s = server.Server(SERVER_HOST, SERVER_PORT, lottery, agency_quorum_min)
     try:
         s.run()
     except Exception as e:

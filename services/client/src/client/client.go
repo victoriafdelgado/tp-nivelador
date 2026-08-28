@@ -89,7 +89,7 @@ func (client *Client) Run() error {
 		return err
 	}
 
-	var batch []domain.Bet
+	batch := make([]domain.Bet, 0, batchSize)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
