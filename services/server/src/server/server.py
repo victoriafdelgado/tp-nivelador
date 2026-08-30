@@ -73,7 +73,6 @@ class Server:
     def _handle_sigterm(self, signum, frame):
         self.shutting_down = True
         self.server_socket.close()
-        self.barrier.abort()
     
     def run(self):
         action = "accept-connection"
