@@ -3,6 +3,7 @@ import logger
 import protocol
 import domain
 import threading
+import signal
 from lottery import Lottery
 
 class Server:
@@ -13,6 +14,9 @@ class Server:
         self.agency_quorum_min = agency_quorum_min
         self.storage_lock = threading.Lock()
         self.barrier = threading.Barrier(agency_quorum_min)
+        self.shutting_down = False
+        self.server_socket = None
+        self.client_threads = []
         
     def _handle_client(self, client_socket):
         action = "handle-client"
@@ -33,7 +37,6 @@ class Server:
                     self.lottery.store_bets(bets)
                     if agency_id is None:
                         agency_id = bets[0].agency_id
-                        print(agency_id)
                     message_amount +=1
                 if msg_type == 2:
                     self.barrier.wait()
@@ -58,22 +61,36 @@ class Server:
             logger.error(action, logger.LogResult.fail, "messages-amount", message_amount)
             raise e
 
+    def _handle_sigterm(self, signum, frame):
+        self.shutting_down = True
+        self.server_socket.close()
+        self.barrier.abort()
+
     def run(self):
         action = "accept-connection"
+        signal.signal(signal.SIGTERM, self._handle_sigterm)
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             server_socket.bind((self.server_host, self.server_port))
             server_socket.listen()
+            self.server_socket = server_socket
             while True:
                 try:
                     logger.info(action, logger.LogResult.in_progress)
                     client_socket, _ = server_socket.accept()
                 except Exception as e:
                     logger.error(action, logger.LogResult.fail)
+                    if self.shutting_down:
+                        break
                     raise e
                 logger.info(action, logger.LogResult.success)
 
                 t = threading.Thread(target=self._handle_client, args=(client_socket,))
                 t.start()
+                self.client_threads.append(t)
+
+        for t in self.client_threads:
+            t.join()
            
-                #self._handle_client(client_socket)
+
 

@@ -2,6 +2,7 @@ package client
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"os"
 	"strconv"
@@ -61,8 +62,13 @@ func connectToServer(host, port string) (net.Conn, error) {
 	return conn, err
 }
 
-func (client *Client) Run() error {
+func (client *Client) Run(ctx context.Context) error {
 	defer client.conn.Close()
+
+	go func() {
+		<-ctx.Done()
+		client.conn.Close()
+	}()
 
 	inputFile, err := os.Open(client.config.InputFile)
 	if err != nil {
@@ -91,6 +97,13 @@ func (client *Client) Run() error {
 
 	batch := make([]domain.Bet, 0, batchSize)
 	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			client.conn.Close()
+			return nil
+		default:
+		}
+
 		line := scanner.Text()
 		if line == "" {
 			continue
@@ -99,6 +112,9 @@ func (client *Client) Run() error {
 
 		bet, err := domain.ParseBetFromString(lineWithAgency)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
 			logger.Error("parser-error", logger.Fail)
 			return err
 		}
@@ -108,32 +124,50 @@ func (client *Client) Run() error {
 		if len(batch) == batchSize {
 			if err := protocol.SendBatchMessage(batch, client.conn); err != nil {
 				logger.Error("send-error", logger.Fail)
+				if ctx.Err() != nil {
+					return nil
+				}
 				return err
 			}
 			batch = batch[:0]
 		}
-
 	}
 
 	if err := scanner.Err(); err != nil {
 		return err
 	}
 
+	select {
+	case <-ctx.Done():
+		client.conn.Close()
+		return nil
+	default:
+	}
+
 	if len(batch) > 0 {
 		if err := protocol.SendBatchMessage(batch, client.conn); err != nil {
 			logger.Error("send-error", logger.Fail)
+			if ctx.Err() != nil {
+				return nil
+			}
 			return err
 		}
 	}
 
 	if err := protocol.SendDoneMessage(client.conn); err != nil {
 		logger.Error("send-error", logger.Fail)
+		if ctx.Err() != nil {
+			return nil
+		}
 		return err
 	}
 
 	ack, err := protocol.ReceiveBatchACK(client.conn)
 	if err != nil {
 		logger.Error("recv-ack", logger.Fail)
+		if ctx.Err() != nil {
+			return nil
+		}
 		return err
 	}
 
@@ -141,11 +175,17 @@ func (client *Client) Run() error {
 		response, err := protocol.ReceiveResultMessage(client.conn)
 		if err != nil {
 			logger.Error("recv-response", logger.Fail)
+			if ctx.Err() != nil {
+				return nil
+			}
 			return err
 		}
 
 		if _, err := writer.WriteString(string(response) + "\n"); err != nil {
 			logger.Error("write-response", logger.Fail)
+			if ctx.Err() != nil {
+				return nil
+			}
 			return err
 		}
 	} else {
