@@ -12,11 +12,10 @@ class Server:
         self.server_port = server_port
         self.lottery = lottery
         self.agency_quorum_min = agency_quorum_min
-        self.storage_lock = threading.Lock()
-        self.barrier = threading.Barrier(agency_quorum_min)
         self.shutting_down = False
         self.server_socket = None
-        self.client_threads = []
+        self.condition = threading.Condition()
+        self.finished_agencies = set()
         
     def _handle_client(self, client_socket):
         action = "handle-client"
@@ -47,11 +46,20 @@ class Server:
         return message_amount, agency_id
 
     def handle_lottery(self, client_socket, agency_id):
-        self.barrier.wait()
-        with self.storage_lock:
-            bets = self.lottery.load_bets()
+        with self.condition:
+            if agency_id is not None:
+                self.finished_agencies.add(agency_id)
+            
+            if len(self.finished_agencies) < self.agency_quorum_min:
+                self.condition.wait()
+            else:
+                self.condition.notify_all()
+
+        bets = self.lottery.load_bets()
         if not bets:
             protocol.send_ack(client_socket, "Error")
+            return
+        
         protocol.send_ack(client_socket, "OK")
         winner_strings = []
         for b in bets:
@@ -86,12 +94,10 @@ class Server:
                     raise e
                 logger.info(action, logger.LogResult.success)
 
-                t = threading.Thread(target=self._handle_client, args=(client_socket,))
-                t.start()
-                self.client_threads.append(t)
+                threading.Thread(target=self._handle_client, args=(client_socket,), daemon=True).start()
+               
 
-        for t in self.client_threads:
-            t.join()
+     
            
 
 
