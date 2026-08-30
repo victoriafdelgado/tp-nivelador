@@ -26,19 +26,14 @@ class Server:
             logger.info(action, logger.LogResult.in_progress)
             while True:
                 msg_type, payload = protocol.recieve_bet_chunk(client_socket)
-                if msg_type == 0:
-                    bet = domain.string_to_bet(payload)
-                    self.lottery.store_bets([bet])
-                    if agency_id is None:
-                        agency_id = bet.agency_id
-                    message_amount += 1
-                if msg_type == 3:
+         
+                if msg_type == 2:
                     bets = domain.strings_to_bets(payload)
                     self.lottery.store_bets(bets)
                     if agency_id is None:
                         agency_id = bets[0].agency_id
                     message_amount +=1
-                if msg_type == 2:
+                if msg_type == 1:
                     self.barrier.wait()
                     with self.storage_lock:
                         bets = self.lottery.load_bets()
@@ -65,7 +60,7 @@ class Server:
         self.shutting_down = True
         self.server_socket.close()
         self.barrier.abort()
-
+    
     def run(self):
         action = "accept-connection"
         signal.signal(signal.SIGTERM, self._handle_sigterm)
