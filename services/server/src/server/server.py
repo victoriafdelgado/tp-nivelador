@@ -26,35 +26,41 @@ class Server:
             logger.info(action, logger.LogResult.in_progress)
             while True:
                 msg_type, payload = protocol.recieve_bet_chunk(client_socket)
-         
-                if msg_type == 2:
-                    bets = domain.strings_to_bets(payload)
-                    self.lottery.store_bets(bets)
-                    if agency_id is None:
-                        agency_id = bets[0].agency_id
-                    message_amount +=1
-                if msg_type == 1:
-                    self.barrier.wait()
-                    with self.storage_lock:
-                        bets = self.lottery.load_bets()
-                    if not bets:
-                        protocol.send_ack(client_socket, "Error")
-                    protocol.send_ack(client_socket, "OK")
-                    winner_strings = []
-                    for b in bets:
-                        if self.lottery.has_won(b) and int(b.agency_id) == agency_id:
-                            winner_strings.append(domain.bet_to_string(b))
-                    
-                    payload = "\n".join(winner_strings) 
-                    protocol.send_result_message(client_socket, payload)
+                if msg_type == protocol.RECIEVE_BET_CHUNK:
+                    message_amount, agency_id = self.receive_chunk(payload, message_amount, agency_id)
+                if msg_type == protocol.CLIENT_DONE:
+                    agency_id = self.handle_lottery(client_socket, agency_id)
                     return
-
                 if msg_type is None:
                     logger.info(action, logger.LogResult.success, "messages-amount", message_amount)
                     return
         except Exception as e:
             logger.error(action, logger.LogResult.fail, "messages-amount", message_amount)
             raise e
+
+    def receive_chunk(self,payload, message_amount, agency_id):
+        bets = domain.strings_to_bets(payload)
+        self.lottery.store_bets(bets)
+        if agency_id is None:
+            agency_id = bets[0].agency_id
+        message_amount +=1
+        return message_amount, agency_id
+
+    def handle_lottery(self, client_socket, agency_id):
+        self.barrier.wait()
+        with self.storage_lock:
+            bets = self.lottery.load_bets()
+        if not bets:
+            protocol.send_ack(client_socket, "Error")
+        protocol.send_ack(client_socket, "OK")
+        winner_strings = []
+        for b in bets:
+            if self.lottery.has_won(b) and int(b.agency_id) == agency_id:
+                winner_strings.append(domain.bet_to_string(b))
+        
+        payload = "\n".join(winner_strings) 
+        protocol.send_result_message(client_socket, payload)
+        return agency_id
 
     def _handle_sigterm(self, signum, frame):
         self.shutting_down = True
