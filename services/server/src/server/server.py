@@ -15,7 +15,9 @@ class Server:
         self.shutting_down = False
         self.server_socket = None
         self.condition = threading.Condition()
+        self.storage_lock = threading.Lock()
         self.finished_agencies = set()
+        self.client_threads = []
         
     def _handle_client(self, client_socket):
         action = "handle-client"
@@ -39,9 +41,12 @@ class Server:
 
     def receive_chunk(self,payload, message_amount, agency_id):
         bets = domain.strings_to_bets(payload)
-        self.lottery.store_bets(bets)
         if agency_id is None:
             agency_id = bets[0].agency_id
+
+        with self.storage_lock:
+            self.lottery.store_bets(bets)
+        
         message_amount +=1
         return message_amount, agency_id
 
@@ -49,17 +54,12 @@ class Server:
         with self.condition:
             if agency_id is not None:
                 self.finished_agencies.add(agency_id)
-            
-            if len(self.finished_agencies) < self.agency_quorum_min:
+            while len(self.finished_agencies) < self.agency_quorum_min:
                 self.condition.wait()
-            else:
-                self.condition.notify_all()
-
-        bets = self.lottery.load_bets()
-        if not bets:
-            protocol.send_ack(client_socket, "Error")
-            return
-        
+            self.condition.notify_all()
+            
+        with self.storage_lock:
+            bets = self.lottery.load_bets()
         protocol.send_ack(client_socket, "OK")
         winner_strings = []
         for b in bets:
@@ -73,6 +73,9 @@ class Server:
     def _handle_sigterm(self, signum, frame):
         self.shutting_down = True
         self.server_socket.close()
+        self.condition.notify_all()
+        for t in self.client_threads:
+            t.join()
     
     def run(self):
         action = "accept-connection"
@@ -93,10 +96,6 @@ class Server:
                     raise e
                 logger.info(action, logger.LogResult.success)
 
-                threading.Thread(target=self._handle_client, args=(client_socket,), daemon=True).start()
-               
-
-     
-           
-
-
+                t = threading.Thread(target=self._handle_client, args=(client_socket,), daemon=True)
+                t.start()
+                self.client_threads.append(t)  
