@@ -9,8 +9,6 @@ import (
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
 )
 
-type MessageType int
-
 const (
 	ReceiveMessage = iota
 	DoneSendingBets
