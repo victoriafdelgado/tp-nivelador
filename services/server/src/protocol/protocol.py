@@ -4,6 +4,7 @@ SEND_RESULT_MESSAGE = 0
 CLIENT_DONE = 1
 RECIEVE_BET_CHUNK = 2
 SEND_BATCH_ACK = 3
+RECIEVE_AGENCY_ID = 4
 
 def send_result_message(socket, result):
     payload = result.encode('utf-8')
@@ -32,3 +33,15 @@ def send_ack(socket, result):
     header = msg_type + len(payload).to_bytes(4, byteorder='big')
     message = header + payload
     return safe_socket.send_all(socket, message)
+
+def agency_id_announcement(socket):
+    header_bytes = safe_socket.recv_all(socket, 5)
+    if len(header_bytes) == 0:
+        return None
+    msg_type = header_bytes[0]
+    size = int.from_bytes(header_bytes[1:5], byteorder='big')
+    if size == 0:
+        return None
+    payload_bytes = safe_socket.recv_all(socket, size)
+    agency_id = payload_bytes.decode('utf-8')
+    return msg_type, agency_id

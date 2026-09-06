@@ -14,10 +14,11 @@ const (
 	DoneSendingBets
 	SendBatch
 	BatchACK
+	AnnounceAgency
 )
 
 func serializeBet(bet domain.Bet) []byte {
-	payload := fmt.Sprintf("%d,%s,%s,%d,%s,%d", bet.AgencyId, bet.Name, bet.Surname, bet.Id, bet.DateOfBirth, bet.Number)
+	payload := fmt.Sprintf("%s,%s,%d,%s,%d", bet.Name, bet.Surname, bet.Id, bet.DateOfBirth, bet.Number)
 	return []byte(payload)
 }
 
@@ -30,6 +31,15 @@ func serializeBets(bets []domain.Bet) []byte {
 		}
 	}
 	return serializedBets
+}
+
+func SendAnnounceAgencyMessage(agencyId string, socket io.Writer) error {
+	payload := []byte(agencyId)
+	header := make([]byte, 5)
+	header[0] = AnnounceAgency		
+	binary.BigEndian.PutUint32(header[1:], uint32(len(payload)))
+	message := append(header, payload...)
+	return safe_socket.SendAll(socket, message)
 }
 
 func SendBatchMessage(bets []domain.Bet, socket io.Writer) error {

@@ -22,33 +22,38 @@ class Server:
     def _handle_client(self, client_socket):
         action = "handle-client"
         message_amount = 0
-        agency_id = None
+        
         try:
             logger.info(action, logger.LogResult.in_progress)
+            msg_type, payload = protocol.agency_id_announcement(client_socket)
+            agency_id = int(payload)
+            if msg_type != protocol.RECIEVE_AGENCY_ID:
+                logger.error(action, logger.LogResult.fail, "agency id not received correctly", message_amount)
+                return
             while True:
                 msg_type, payload = protocol.recieve_bet_chunk(client_socket)
                 if msg_type == protocol.RECIEVE_BET_CHUNK:
-                    message_amount, agency_id = self.receive_chunk(payload, message_amount, agency_id)
+                    message_amount = self.receive_chunk(payload, message_amount, agency_id)
+                    protocol.send_ack(client_socket, "OK")
                 if msg_type == protocol.CLIENT_DONE:
-                    agency_id = self.handle_lottery(client_socket, agency_id)
+                    self.handle_lottery(client_socket, agency_id)
                     return
                 if msg_type is None:
                     logger.info(action, logger.LogResult.success, "messages-amount", message_amount)
                     return
         except Exception as e:
             logger.error(action, logger.LogResult.fail, "messages-amount", message_amount)
+            protocol.send_ack(client_socket, "ERROR")
             raise e
 
     def receive_chunk(self,payload, message_amount, agency_id):
-        bets = domain.strings_to_bets(payload)
-        if agency_id is None:
-            agency_id = bets[0].agency_id
+        bets = domain.strings_to_bets(payload, agency_id)
 
         with self.storage_lock:
             self.lottery.store_bets(bets)
         
         message_amount +=1
-        return message_amount, agency_id
+        return message_amount
 
     def handle_lottery(self, client_socket, agency_id):
         with self.condition:
@@ -60,7 +65,7 @@ class Server:
             
         with self.storage_lock:
             bets = self.lottery.load_bets()
-        protocol.send_ack(client_socket, "OK")
+
         winner_strings = []
         for b in bets:
             if self.lottery.has_won(b) and int(b.agency_id) == agency_id:
@@ -68,7 +73,6 @@ class Server:
         
         payload = "\n".join(winner_strings) 
         protocol.send_result_message(client_socket, payload)
-        return agency_id
 
     def _handle_sigterm(self, signum, frame):
         self.shutting_down = True

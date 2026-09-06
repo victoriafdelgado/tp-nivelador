@@ -95,6 +95,16 @@ func (client *Client) Run(ctx context.Context) error {
 		return err
 	}
 
+	// primero se envia un mensaje con el orden de agencia, para que el servidor pueda asociar 
+	// los bets con la agencia correspondiente sin tener que enviarla con cada bet
+	if err := protocol.SendAnnounceAgencyMessage(client.config.AgencyId, client.conn); err != nil {
+		logger.Error("send-agency", logger.Fail)
+		if ctx.Err() != nil {
+			return nil
+		}
+		return err
+	}
+
 	batch := make([]domain.Bet, 0, batchSize)
 	for scanner.Scan() {
 		select {
@@ -108,9 +118,8 @@ func (client *Client) Run(ctx context.Context) error {
 		if line == "" {
 			continue
 		}
-		lineWithAgency := client.config.AgencyId + "," + line
 
-		bet, err := domain.ParseBetFromString(lineWithAgency)
+		bet, err := domain.ParseBetFromString(line)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
@@ -129,6 +138,14 @@ func (client *Client) Run(ctx context.Context) error {
 				}
 				return err
 			}
+
+			ack, err := protocol.ReceiveBatchACK(client.conn)
+            if err != nil || ack != "OK" {
+                if ctx.Err() != nil {
+                    return nil
+                }
+                return err
+            }
 			batch = batch[:0]
 		}
 	}
@@ -152,6 +169,14 @@ func (client *Client) Run(ctx context.Context) error {
 			}
 			return err
 		}
+
+		ack, err := protocol.ReceiveBatchACK(client.conn)
+            if err != nil || ack != "OK" {
+                if ctx.Err() != nil {
+                    return nil
+                }
+                return err
+            }
 	}
 
 	if err := protocol.SendDoneMessage(client.conn); err != nil {
@@ -162,35 +187,24 @@ func (client *Client) Run(ctx context.Context) error {
 		return err
 	}
 
-	ack, err := protocol.ReceiveBatchACK(client.conn)
+
+	response, err := protocol.ReceiveResultMessage(client.conn)
 	if err != nil {
-		logger.Error("recv-ack", logger.Fail)
+		logger.Error("recv-response", logger.Fail)
 		if ctx.Err() != nil {
 			return nil
 		}
 		return err
 	}
 
-	if ack == "OK" {
-		response, err := protocol.ReceiveResultMessage(client.conn)
-		if err != nil {
-			logger.Error("recv-response", logger.Fail)
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
+	if _, err := writer.WriteString(string(response) + "\n"); err != nil {
+		logger.Error("write-response", logger.Fail)
+		if ctx.Err() != nil {
+			return nil
 		}
-
-		if _, err := writer.WriteString(string(response) + "\n"); err != nil {
-			logger.Error("write-response", logger.Fail)
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
-	} else {
-		logger.Error("error-processing-batch", logger.Fail)
+		return err
 	}
+	writer.Flush()
 
 	return nil
 }
