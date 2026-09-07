@@ -65,9 +65,15 @@ func connectToServer(host, port string) (net.Conn, error) {
 func (client *Client) Run(ctx context.Context) error {
 	defer client.conn.Close()
 
+	done := make(chan struct{})
+	defer close(done)
+
 	go func() {
-		<-ctx.Done()
-		client.conn.Close()
+		select {
+		case <-ctx.Done():
+			client.conn.Close()
+		case <-done:
+		}
 	}()
 
 	inputFile, err := os.Open(client.config.InputFile)
@@ -84,19 +90,31 @@ func (client *Client) Run(ctx context.Context) error {
 	}
 	defer outputFile.Close()
 
-	scanner := bufio.NewScanner(inputFile)
-
-	writer := bufio.NewWriter(outputFile)
-	defer writer.Flush()
-
 	batchSize, err := strconv.Atoi(client.config.BatchSize)
 	if err != nil {
 		logger.Error("parse-batch-size", logger.Fail)
 		return err
 	}
 
-	// primero se envia un mensaje con el orden de agencia, para que el servidor pueda asociar 
-	// los bets con la agencia correspondiente sin tener que enviarla con cada bet
+	if err := client.announceAgency(ctx); err != nil {
+		return err
+	}
+
+	scanner := bufio.NewScanner(inputFile)
+	if err := client.sendBets(ctx, scanner, batchSize); err != nil {
+		return err
+	}
+
+	writer := bufio.NewWriter(outputFile)
+	defer writer.Flush()
+	if err := client.receiveAndSaveWinners(ctx, writer); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (client *Client) announceAgency(ctx context.Context) error {
 	if err := protocol.SendAnnounceAgencyMessage(client.config.AgencyId, client.conn); err != nil {
 		logger.Error("send-agency", logger.Fail)
 		if ctx.Err() != nil {
@@ -104,7 +122,10 @@ func (client *Client) Run(ctx context.Context) error {
 		}
 		return err
 	}
+	return nil
+}
 
+func (client *Client) sendBets(ctx context.Context, scanner *bufio.Scanner, batchSize int) error {
 	batch := make([]domain.Bet, 0, batchSize)
 	for scanner.Scan() {
 		select {
@@ -131,21 +152,9 @@ func (client *Client) Run(ctx context.Context) error {
 		batch = append(batch, bet)
 
 		if len(batch) == batchSize {
-			if err := protocol.SendBatchMessage(batch, client.conn); err != nil {
-				logger.Error("send-error", logger.Fail)
-				if ctx.Err() != nil {
-					return nil
-				}
+			if err := client.sendBatchAndReceiveACK(ctx, batch); err != nil {
 				return err
 			}
-
-			ack, err := protocol.ReceiveBatchACK(client.conn)
-            if err != nil || ack != "OK" {
-                if ctx.Err() != nil {
-                    return nil
-                }
-                return err
-            }
 			batch = batch[:0]
 		}
 	}
@@ -162,24 +171,15 @@ func (client *Client) Run(ctx context.Context) error {
 	}
 
 	if len(batch) > 0 {
-		if err := protocol.SendBatchMessage(batch, client.conn); err != nil {
-			logger.Error("send-error", logger.Fail)
-			if ctx.Err() != nil {
-				return nil
-			}
+		if err := client.sendBatchAndReceiveACK(ctx, batch); err != nil {
 			return err
 		}
-
-		ack, err := protocol.ReceiveBatchACK(client.conn)
-            if err != nil || ack != "OK" {
-                if ctx.Err() != nil {
-                    return nil
-                }
-                return err
-            }
 	}
+	return nil
+}
 
-	if err := protocol.SendDoneMessage(client.conn); err != nil {
+func (client *Client) sendBatchAndReceiveACK(ctx context.Context, batch []domain.Bet) error {
+	if err := protocol.SendBatchMessage(batch, client.conn); err != nil {
 		logger.Error("send-error", logger.Fail)
 		if ctx.Err() != nil {
 			return nil
@@ -187,6 +187,24 @@ func (client *Client) Run(ctx context.Context) error {
 		return err
 	}
 
+	ack, err := protocol.ReceiveBatchACK(client.conn)
+	if err != nil || ack != "OK" {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func (client *Client) receiveAndSaveWinners(ctx context.Context, writer *bufio.Writer) error {
+	if err := protocol.SendDoneMessage(client.conn); err != nil {
+		logger.Error("send-error", logger.Fail)
+		if ctx.Err() != nil {
+			return nil
+		}
+		return err
+	}
 
 	response, err := protocol.ReceiveResultMessage(client.conn)
 	if err != nil {
@@ -205,6 +223,5 @@ func (client *Client) Run(ctx context.Context) error {
 		return err
 	}
 	writer.Flush()
-
 	return nil
 }

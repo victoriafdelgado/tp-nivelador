@@ -58,6 +58,8 @@ func run() int {
 		logger.Error("load-config", logger.Fail, "err", err)
 		return 1
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	client, err := client.NewClient(config)
 	if err != nil {
@@ -65,8 +67,6 @@ func run() int {
 		return 1
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	if err := client.Run(ctx); err != nil {
 		logger.Error("client-run", logger.Fail, "err", err)
 		return 1
