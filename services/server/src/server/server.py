@@ -18,12 +18,17 @@ class Server:
         self.storage_lock = threading.Lock()
         self.finished_agencies = set()
         self.client_threads = []
-        
+        self.client_sockets = set()
+        self.client_sockets_lock = threading.Lock()
+
     def _handle_client(self, client_socket):
         action = "handle-client"
         message_amount = 0
         agency_id = None
-        
+
+        with self.client_sockets_lock:
+            self.client_sockets.add(client_socket)
+
         try:
             logger.info(action, logger.LogResult.in_progress)
             msg_type, payload = protocol.agency_id_announcement(client_socket)
@@ -54,6 +59,10 @@ class Server:
             logger.error(action, logger.LogResult.fail, "messages-amount", message_amount)
             protocol.send_ack(client_socket, "ERROR")
             raise e
+        finally:
+            with self.client_sockets_lock:
+                self.client_sockets.remove(client_socket)
+            client_socket.close()
 
     def receive_chunk(self,payload, message_amount, agency_id):
         bets = domain.strings_to_bets(payload, agency_id)
@@ -75,7 +84,7 @@ class Server:
             return
         
         with self.storage_lock:
-            bets = self.lottery.load_bets()
+            bets = list(self.lottery.load_bets())
 
         winner_strings = []
         for b in bets:
@@ -86,9 +95,14 @@ class Server:
         protocol.send_result_message(client_socket, payload)
 
     def _handle_sigterm(self, signum, frame):
+        logger.info("sigterm", logger.LogResult.in_progress)
         self.shutting_down = True
         self.server_socket.close()
-        self.condition.notify_all()
+        with self.condition:
+            self.condition.notify_all()
+        with self.client_sockets_lock:
+            for client_socket in self.client_sockets:
+                client_socket.close()
         for t in self.client_threads:
             t.join()
     
@@ -100,14 +114,14 @@ class Server:
             server_socket.bind((self.server_host, self.server_port))
             server_socket.listen()
             self.server_socket = server_socket
-            while True:
+            while self.shutting_down is False:
                 try:
                     logger.info(action, logger.LogResult.in_progress)
                     client_socket, _ = server_socket.accept()
                 except Exception as e:
-                    logger.error(action, logger.LogResult.fail)
                     if self.shutting_down:
                         break
+                    logger.error(action, logger.LogResult.fail)
                     raise e
                 logger.info(action, logger.LogResult.success)
 
