@@ -85,7 +85,7 @@ func (client *Client) Run(ctx context.Context) error {
 
 	outputFile, err := os.Create(client.config.OutputFile)
 	if err != nil {
-		logger.Error("crate-output-file", logger.Fail, "output-file", client.config.OutputFile)
+		logger.Error("create-output-file", logger.Fail, "output-file", client.config.OutputFile)
 		return err
 	}
 	defer outputFile.Close()
@@ -111,6 +111,7 @@ func (client *Client) Run(ctx context.Context) error {
 		return err
 	}
 
+	logger.Info("client-run", logger.Success, "agency", client.config.AgencyId)
 	return nil
 }
 

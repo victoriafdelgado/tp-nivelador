@@ -2,6 +2,8 @@ from lottery.bet import Bet
 
 def string_to_bet(bet_string, agency_id):
     fields = bet_string.split(',')
+    if len(fields) != 5:
+        raise ValueError(f"Invalid bet string: {bet_string}")
     first_name, last_name, document, birthdate, number = fields
     return Bet(int(agency_id), first_name, last_name, int(document), birthdate, int(number))
 

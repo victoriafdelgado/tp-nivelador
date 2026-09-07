@@ -14,9 +14,14 @@ type Bet struct {
 	Number      int
 }
 
+const fieldCount = 5
+
 func ParseBetFromString(betString string) (Bet, error) {
 
 	fields := strings.Split(betString, ",")
+	if len(fields) < fieldCount {
+		return Bet{}, fmt.Errorf("formato inválido, se esperaban %d campos y llegaron %d", fieldCount, len(fields))
+	}
 
 	Name := fields[0]
 	Surname := fields[1]

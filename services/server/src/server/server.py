@@ -22,25 +22,34 @@ class Server:
     def _handle_client(self, client_socket):
         action = "handle-client"
         message_amount = 0
+        agency_id = None
         
         try:
             logger.info(action, logger.LogResult.in_progress)
             msg_type, payload = protocol.agency_id_announcement(client_socket)
-            agency_id = int(payload)
+            
             if msg_type != protocol.RECIEVE_AGENCY_ID:
                 logger.error(action, logger.LogResult.fail, "agency id not received correctly", message_amount)
                 return
+
+            agency_id = int(payload)
+
             while True:
                 msg_type, payload = protocol.recieve_bet_chunk(client_socket)
+
                 if msg_type == protocol.RECIEVE_BET_CHUNK:
                     message_amount = self.receive_chunk(payload, message_amount, agency_id)
                     protocol.send_ack(client_socket, "OK")
+
                 if msg_type == protocol.CLIENT_DONE:
                     self.handle_lottery(client_socket, agency_id)
+                    logger.info(action, logger.LogResult.success, "messages-amount", message_amount)
                     return
+                
                 if msg_type is None:
                     logger.info(action, logger.LogResult.success, "messages-amount", message_amount)
                     return
+                
         except Exception as e:
             logger.error(action, logger.LogResult.fail, "messages-amount", message_amount)
             protocol.send_ack(client_socket, "ERROR")
@@ -52,17 +61,19 @@ class Server:
         with self.storage_lock:
             self.lottery.store_bets(bets)
         
-        message_amount +=1
-        return message_amount
+        return message_amount + 1
 
     def handle_lottery(self, client_socket, agency_id):
         with self.condition:
             if agency_id is not None:
                 self.finished_agencies.add(agency_id)
-            while len(self.finished_agencies) < self.agency_quorum_min:
+            while len(self.finished_agencies) < self.agency_quorum_min and not self.shutting_down: 
                 self.condition.wait()
             self.condition.notify_all()
-            
+
+        if self.shutting_down:
+            return
+        
         with self.storage_lock:
             bets = self.lottery.load_bets()
 

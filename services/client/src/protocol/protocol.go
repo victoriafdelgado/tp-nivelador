@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	ReceiveMessage = iota
+	ReceiveMessage byte = iota
 	DoneSendingBets
 	SendBatch
 	BatchACK
@@ -36,7 +36,7 @@ func serializeBets(bets []domain.Bet) []byte {
 func SendAnnounceAgencyMessage(agencyId string, socket io.Writer) error {
 	payload := []byte(agencyId)
 	header := make([]byte, 5)
-	header[0] = AnnounceAgency		
+	header[0] = AnnounceAgency
 	binary.BigEndian.PutUint32(header[1:], uint32(len(payload)))
 	message := append(header, payload...)
 	return safe_socket.SendAll(socket, message)
@@ -53,7 +53,7 @@ func SendBatchMessage(bets []domain.Bet, socket io.Writer) error {
 
 func SendDoneMessage(socket io.Writer) error {
 	header := make([]byte, 5)
-	header[0] = byte(DoneSendingBets)
+	header[0] = DoneSendingBets
 	binary.BigEndian.PutUint32(header[1:], 0)
 	return safe_socket.SendAll(socket, header)
 }

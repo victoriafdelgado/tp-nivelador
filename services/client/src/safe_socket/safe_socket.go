@@ -30,6 +30,9 @@ func RecvAll(socket io.Reader, size int) ([]byte, error) {
 		}
 		if err != nil {
 			if err == io.EOF {
+				if bytesReceived == 0 {
+					return nil, io.EOF
+				}
 				return nil, io.ErrUnexpectedEOF
 			}
 			return nil, err
