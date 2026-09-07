@@ -17,6 +17,8 @@ const (
 	AnnounceAgency
 )
 
+const FixedHeaderSize = 5
+
 func serializeBet(bet domain.Bet) []byte {
 	payload := fmt.Sprintf("%s,%s,%d,%s,%d", bet.Name, bet.Surname, bet.Id, bet.DateOfBirth, bet.Number)
 	return []byte(payload)
@@ -35,7 +37,7 @@ func serializeBets(bets []domain.Bet) []byte {
 
 func SendAnnounceAgencyMessage(agencyId string, socket io.Writer) error {
 	payload := []byte(agencyId)
-	header := make([]byte, 5)
+	header := make([]byte, FixedHeaderSize)
 	header[0] = AnnounceAgency
 	binary.BigEndian.PutUint32(header[1:], uint32(len(payload)))
 	message := append(header, payload...)
@@ -44,7 +46,7 @@ func SendAnnounceAgencyMessage(agencyId string, socket io.Writer) error {
 
 func SendBatchMessage(bets []domain.Bet, socket io.Writer) error {
 	payload := serializeBets(bets)
-	header := make([]byte, 5)
+	header := make([]byte, FixedHeaderSize)
 	header[0] = SendBatch
 	binary.BigEndian.PutUint32(header[1:], uint32(len(payload)))
 	message := append(header, payload...)
@@ -52,14 +54,14 @@ func SendBatchMessage(bets []domain.Bet, socket io.Writer) error {
 }
 
 func SendDoneMessage(socket io.Writer) error {
-	header := make([]byte, 5)
+	header := make([]byte, FixedHeaderSize)
 	header[0] = DoneSendingBets
 	binary.BigEndian.PutUint32(header[1:], 0)
 	return safe_socket.SendAll(socket, header)
 }
 
 func ReceiveResultMessage(socket io.Reader) (string, error) {
-	header, err := safe_socket.RecvAll(socket, 5)
+	header, err := safe_socket.RecvAll(socket, FixedHeaderSize)
 	if err != nil {
 		return "", err
 	}
@@ -75,7 +77,7 @@ func ReceiveResultMessage(socket io.Reader) (string, error) {
 }
 
 func ReceiveBatchACK(socket io.Reader) (string, error) {
-	header, err := safe_socket.RecvAll(socket, 5)
+	header, err := safe_socket.RecvAll(socket, FixedHeaderSize)
 	if err != nil {
 		return "", err
 	}

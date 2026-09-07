@@ -8,12 +8,14 @@ RECIEVE_BET_CHUNK = 2
 SEND_BATCH_ACK = 3
 RECIEVE_AGENCY_ID = 4
 
+FIXED_HEADER_SIZE = 5 # 1 byte para el tipo de mensaje + 4 bytes para el tamaño del payload
+
 def _build_packet(msg_type, payload):
     header = msg_type.to_bytes(1, byteorder='big') + len(payload).to_bytes(4, byteorder='big')
     return header + payload
 
 def _receive_packet(socket):
-    header_bytes = safe_socket.recv_all(socket, 5)
+    header_bytes = safe_socket.recv_all(socket, FIXED_HEADER_SIZE)
     if len(header_bytes) == 0:
         return None, None
     msg_type = header_bytes[0]
