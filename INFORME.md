@@ -16,9 +16,9 @@ El payload:
 # Implementación de concurrencia
 
 ## Uso de threads
-La concurrencia se implementó usando un modelo basado en threads (utilizando la librería `threading` de Python). Se le asignó un hilo a cada cliente, y cada uno procesa sus propias apuestas concurrentemente.
+La concurrencia se implementó utilizando un modelo basado en threads (mediante la librería `threading` de Python). Se le asigna un hilo a cada cliente conectado, para poder procesar sus propias apuestas de forma concurrente.
 
-Este programa realiza principalmente operaciones I/O-bound (enviar/recibir datos por sockets y leer/escribir archivos), que ocurren por fuera del GIL. El GIL no sería ideal para operaciones CPU-bound.
+Se eligio usar threads ya que el programa es principalmente I/O-bound: la mayor parte del tiempo se dedica a enviar y recibir datos por sockets y a leer y escribir archivos, operaciones que liberan el GIL mientras esperan a completarse. En un escenario CPU-bound, en cambio, el GIL sí sería una limitación real, ya que impediría aprovechar múltiples núcleos para cómputo puro.
 
 ## Métodos de sincronización
 - **Condition**: se utiliza para esperar a las agencias hasta que se haya alcanzado el quórum mínimo (`AGENCY_QUORUM_MIN`, configurado como variable de entorno) de agencias que terminaron de enviar sus apuestas. Cuando se alcanza esta cantidad de agencias, se procesan y devuelven los ganadores. Los threads esperan bloqueados en `wait()`.
