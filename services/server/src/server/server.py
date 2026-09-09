@@ -6,6 +6,8 @@ import threading
 import signal
 from lottery import Lottery
 
+SHUTDOWN_TIMEOUT = 3
+
 class Server:
     def __init__(self, server_host: str, server_port: int, lottery: Lottery, agency_quorum_min: int) -> None:
         self.server_host = server_host
@@ -25,9 +27,6 @@ class Server:
         action = "handle-client"
         message_amount = 0
         agency_id = None
-
-        with self.client_sockets_lock:
-            self.client_sockets.add(client_socket)
 
         try:
             logger.info(action, logger.LogResult.in_progress)
@@ -102,9 +101,11 @@ class Server:
             self.condition.notify_all()
         with self.client_sockets_lock:
             for client_socket in self.client_sockets:
+                try:
+                    client_socket.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
                 client_socket.close()
-        for t in self.client_threads:
-            t.join()
     
     def run(self):
         action = "accept-connection"
@@ -125,6 +126,14 @@ class Server:
                     raise e
                 logger.info(action, logger.LogResult.success)
 
+                with self.client_sockets_lock:
+                    self.client_sockets.add(client_socket)
+
                 t = threading.Thread(target=self._handle_client, args=(client_socket,), daemon=True)
-                t.start()
                 self.client_threads.append(t)  
+                t.start()
+
+        for t in self.client_threads:
+            t.join(timeout=SHUTDOWN_TIMEOUT)
+            if t.is_alive():
+                logger.error("shutdown", logger.LogResult.fail, "thread no termino dentro del timeout")
