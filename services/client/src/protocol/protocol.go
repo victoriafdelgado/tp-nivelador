@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/domain"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
@@ -17,11 +18,21 @@ const (
 	AnnounceAgency
 )
 
+const Delimiter = ','
 const FixedHeaderSize = 5
 
 func serializeBet(bet domain.Bet) []byte {
-	payload := fmt.Sprintf("%s,%s,%d,%s,%d", bet.Name, bet.Surname, bet.Id, bet.DateOfBirth, bet.Number)
-	return []byte(payload)
+	var buf []byte
+	buf = append(buf, []byte(bet.Name)...)
+	buf = append(buf, Delimiter)
+	buf = append(buf, []byte(bet.Surname)...)
+	buf = append(buf, Delimiter)
+	buf = append(buf, []byte(strconv.Itoa(bet.Id))...)
+	buf = append(buf, Delimiter)
+	buf = append(buf, []byte(bet.DateOfBirth)...)
+	buf = append(buf, Delimiter)
+	buf = append(buf, []byte(strconv.Itoa(bet.Number))...)
+	return buf
 }
 
 func serializeBets(bets []domain.Bet) []byte {
